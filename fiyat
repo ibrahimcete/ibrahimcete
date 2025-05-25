@@ -1,0 +1,1059 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+// For Excel export, you would typically use a library.
+// We'll simulate the data preparation and mention where a library like 'xlsx' would be used.
+// import * as XLSX from 'xlsx'; // Example: yarn add xlsx
+
+// --- Global Constants ---
+const PRODUCTS_FILE_KEY = "razzoni_products"; // localStorage key
+const OPENAI_API_KEY_KEY = "razzoni_openai_api_key"; // localStorage key
+
+const MARKETPLACES = {
+    "Trendyol": 21,
+    "Hepsiburada": 18,
+    "N11": 20,
+    "PTTAVM": 20,
+    "Koçtaş": 21,
+    "Pazarama": 18
+};
+
+const INITIAL_OPENAI_API_KEY = "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"; // Default, but will be loaded from localStorage
+
+// --- Helper Functions ---
+const loadProductsFromStorage = () => {
+    const storedProducts = localStorage.getItem(PRODUCTS_FILE_KEY);
+    if (storedProducts) {
+        try {
+            return JSON.parse(storedProducts);
+        } catch (e) {
+            console.error("Error parsing products from localStorage:", e);
+            return {};
+        }
+    }
+    return {}; // Default empty products
+};
+
+const saveProductsToStorage = (data) => {
+    try {
+        localStorage.setItem(PRODUCTS_FILE_KEY, JSON.stringify(data));
+    } catch (e) {
+        console.error("Error saving products to localStorage:", e);
+    }
+};
+
+const loadApiKeyFromStorage = () => {
+    return localStorage.getItem(OPENAI_API_KEY_KEY) || INITIAL_OPENAI_API_KEY;
+};
+
+const saveApiKeyToStorage = (apiKey) => {
+    localStorage.setItem(OPENAI_API_KEY_KEY, apiKey);
+};
+
+
+// --- Styling ---
+// It's better to use CSS files, but for a single App.js, styles can be here.
+const styles = `
+    body {
+        font-family: 'Arial', sans-serif;
+        margin: 0;
+        background-color: #0d1117; /* GitHub dark background */
+        color: #c9d1d9; /* GitHub dark text */
+    }
+    .app-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        padding: 10px;
+    }
+    .tabs-nav {
+        display: flex;
+        border-bottom: 1px solid #30363d; /* GitHub dark border */
+        margin-bottom: 15px;
+        background-color: #161b22; /* GitHub dark header */
+        border-radius: 6px 6px 0 0;
+        padding: 5px;
+    }
+    .tab-button {
+        padding: 10px 18px;
+        cursor: pointer;
+        border: none;
+        background-color: transparent;
+        color: #8b949e; /* GitHub dark secondary text */
+        font-size: 15px;
+        border-radius: 6px;
+        margin-right: 5px;
+    }
+    .tab-button.active {
+        background-color: #238636; /* GitHub dark green (selected tab) */
+        color: #ffffff;
+        font-weight: bold;
+    }
+    .tab-button:hover:not(.active) {
+        background-color: #21262d; /* GitHub dark hover */
+    }
+    .tab-content {
+        flex-grow: 1;
+        padding: 15px;
+        background-color: #161b22; /* GitHub dark component background */
+        border-radius: 0 0 6px 6px;
+        overflow-y: auto;
+    }
+    .ctk-frame {
+        background-color: #232f47; /* CustomTkinter-like frame */
+        padding: 18px;
+        border-radius: 16px;
+        margin-bottom: 15px;
+    }
+    .ctk-label {
+        color: #c9d1d9;
+        margin-bottom: 8px;
+        display: block;
+    }
+    .ctk-entry, .ctk-combo, .ctk-textbox {
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 12px;
+        border-radius: 6px;
+        border: 1px solid #30363d;
+        background-color: #0d1117;
+        color: #c9d1d9;
+        font-size: 14px;
+    }
+    .ctk-button {
+        padding: 10px 18px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;
+        margin-right: 8px;
+        transition: background-color 0.2s;
+    }
+    .ctk-button-primary {
+        background-color: #54b4ff; color: #0d1117;
+    }
+    .ctk-button-primary:hover { background-color: #429ce3; }
+    .ctk-button-success {
+        background-color: #3cd070; color: #ffffff;
+    }
+    .ctk-button-success:hover { background-color: #2aa757; }
+    .ctk-button-warning {
+        background-color: #eac645; color: #332500;
+    }
+    .ctk-button-warning:hover { background-color: #d5b133; }
+    .ctk-button-danger {
+        background-color: #e34242; color: #ffffff;
+    }
+    .ctk-button-danger:hover { background-color: #c82323; }
+
+    .fiyat-card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+        padding: 10px;
+        background-color: #19213a; /* CustomTkinter-like scroll frame */
+        border-radius: 16px;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    .fiyat-card {
+        border: 2px solid #4287f5;
+        border-radius: 16px;
+        padding: 15px;
+        background-color: #19274d; /* Card background */
+    }
+    .fiyat-card-title { font-size: 17px; font-weight: bold; margin-bottom: 8px; }
+    .fiyat-card-text { font-size: 15px; margin-bottom: 4px; }
+    .fiyat-card-profit-positive { color: #3cd070; }
+    .fiyat-card-profit-negative { color: #e34242; }
+    .fiyat-card-commission { font-size: 13px; color: #b1b1b1; margin-bottom: 4px; }
+    .fiyat-card-variant { font-size: 13px; margin-bottom: 10px; }
+
+    .products-table {
+        background-color: #212b3c;
+        border-radius: 16px;
+        padding: 15px;
+        max-height: 60vh; /* Adjust as needed */
+        overflow-y: auto;
+    }
+    .product-model-header {
+        font-size: 15px;
+        font-weight: bold;
+        background-color: #264164;
+        padding: 8px;
+        border-radius: 8px;
+        margin-top: 10px;
+        margin-bottom: 5px;
+    }
+    .product-variant-item {
+        font-size: 14px;
+        background-color: #253252;
+        padding: 6px 8px;
+        border-radius: 6px;
+        margin-left: 20px; /* Indent variants */
+        margin-bottom: 3px;
+    }
+    .button-group {
+        display: flex;
+        gap: 10px;
+        margin-top: 15px;
+        padding: 10px 0;
+    }
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0,0,0,0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    .modal-content {
+        background-color: #161b22; /* Dark modal */
+        padding: 25px;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+    .modal-content label { display: block; margin-bottom: 8px; color: #c9d1d9; }
+    .modal-content input, .modal-content textarea {
+        width: calc(100% - 22px); /* Account for padding */
+        padding: 10px;
+        margin-bottom: 15px;
+        border-radius: 6px;
+        border: 1px solid #30363d;
+        background-color: #0d1117;
+        color: #c9d1d9;
+    }
+    .modal-buttons { margin-top: 20px; text-align: right; }
+
+    .info-banner {
+        padding: 10px;
+        background-color: #238636; /* Green banner */
+        color: white;
+        border-radius: 6px;
+        margin-bottom: 15px;
+        font-size: 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .info-banner button {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 16px;
+        cursor: pointer;
+    }
+    .ad-banner-placeholder {
+        padding: 20px;
+        margin-top: 20px;
+        border: 2px dashed #30363d;
+        text-align: center;
+        color: #8b949e;
+        border-radius: 8px;
+        background-color: #0d1117;
+    }
+`;
+
+// --- Components ---
+
+const FiyatCard = ({ data }) => {
+    const color = data.kar > 0 ? 'fiyat-card-profit-positive' : 'fiyat-card-profit-negative';
+    const icon = data.kar > 0 ? "🟢" : "🔴";
+    return (
+        <div className="fiyat-card">
+            <div className="fiyat-card-title">{`${icon} ${data.pazaryeri}`}</div>
+            <div className="fiyat-card-text">{`Satış: ${data.satis.toFixed(2)} ₺`}</div>
+            <div className={`fiyat-card-text ${color}`}>{`Kâr: ${data.kar.toFixed(2)} ₺  |  Kâr %: ${data.kar_yuzde.toFixed(1)}`}</div>
+            <div className="fiyat-card-commission">{`Komisyon: %${data.komisyon}`}</div>
+            <div className="fiyat-card-variant">{`Varyant: ${data.ebat}`}</div>
+        </div>
+    );
+};
+
+const OnboardingInfo = ({ message, onDismiss, storageKey }) => {
+    const [isVisible, setIsVisible] = useState(false);
+
+    useEffect(() => {
+        const dismissed = localStorage.getItem(storageKey);
+        if (!dismissed) {
+            setIsVisible(true);
+        }
+    }, [storageKey]);
+
+    const handleDismiss = () => {
+        setIsVisible(false);
+        localStorage.setItem(storageKey, 'true');
+        if (onDismiss) onDismiss();
+    };
+
+    if (!isVisible) return null;
+
+    return (
+        <div className="info-banner">
+            <span>{message}</span>
+            <button onClick={handleDismiss}>&times;</button>
+        </div>
+    );
+};
+
+
+function App() {
+    const [activeTab, setActiveTab] = useState("Fiyat Hesapla");
+    const [productPrices, setProductPrices] = useState(loadProductsFromStorage());
+    const [openAIKey, setOpenAIKey] = useState(loadApiKeyFromStorage());
+    const [theme, setTheme] = useState(localStorage.getItem('razzoni_theme') || 'Dark'); // 'Dark' or 'Light'
+
+    // --- Onboarding States (Welcome tour) ---
+    const [showWelcomeTour, setShowWelcomeTour] = useState(false);
+    const [currentTourStep, setCurrentTourStep] = useState(0);
+
+    useEffect(() => {
+        const hasSeenWelcome = localStorage.getItem('razzoni_welcome_seen');
+        if (!hasSeenWelcome) {
+            setShowWelcomeTour(true);
+        }
+    }, []);
+
+    const welcomeTourSteps = [
+        {
+            title: "🎉 Razzoni Fiyat Paneline Hoş Geldin!",
+            text: "Bu panel, ürün fiyatlarınızı kolayca hesaplamanıza, yönetmenize ve stratejiler geliştirmenize yardımcı olmak için tasarlandı. Hadi başlayalım!",
+            target: null // General welcome
+        },
+        {
+            title: "📊 Fiyat Hesapla Sekmesi",
+            text: "Burada ürün maliyetlerinizi girerek çeşitli pazaryerleri için satış fiyatlarınızı ve kârınızı hesaplayabilirsiniz.",
+            targetTab: "Fiyat Hesapla"
+        },
+        {
+            title: "📦 Ürünler Sekmesi",
+            text: "Mevcut ürünlerinizi ve varyantlarını görüntüleyebilir, yenilerini ekleyebilir, düzenleyebilir veya silebilirsiniz.",
+            targetTab: "Ürünler"
+        },
+        {
+            title: "💡 AI Strateji Sekmesi",
+            text: "OpenAI entegrasyonu ile pazar analizi, fiyat önerileri ve reklam stratejileri hakkında tavsiye alabilirsiniz.",
+            targetTab: "AI Strateji"
+        },
+        {
+            title: "⚙️ Ayarlar Sekmesi",
+            text: "OpenAI API anahtarınızı girebilir ve tema ayarlarını değiştirebilirsiniz.",
+            targetTab: "Ayarlar"
+        },
+        {
+            title: "🚀 Hazırsınız!",
+            text: "Artık paneli kullanmaya başlayabilirsiniz. Başarılar!",
+            target: null
+        }
+    ];
+
+    const handleNextTourStep = () => {
+        if (currentTourStep < welcomeTourSteps.length - 1) {
+            setCurrentTourStep(currentTourStep + 1);
+            const nextTab = welcomeTourSteps[currentTourStep + 1].targetTab;
+            if (nextTab) {
+                setActiveTab(nextTab);
+            }
+        } else {
+            setShowWelcomeTour(false);
+            localStorage.setItem('razzoni_welcome_seen', 'true');
+        }
+    };
+
+    // Apply theme (simplified)
+    useEffect(() => {
+        // In a real app, you'd change CSS variables or swap stylesheets
+        document.body.style.backgroundColor = theme === 'Dark' ? '#0d1117' : '#ffffff';
+        document.body.style.color = theme === 'Dark' ? '#c9d1d9' : '#000000';
+        localStorage.setItem('razzoni_theme', theme);
+    }, [theme]);
+
+    const toggleTheme = () => {
+        setTheme(prevTheme => prevTheme === 'Dark' ? 'Light' : 'Dark');
+    };
+
+
+    const saveAllProducts = useCallback((newProducts) => {
+        setProductPrices(newProducts);
+        saveProductsToStorage(newProducts);
+    }, []);
+
+    // Fiyat Hesapla Tab States
+    const [cmbModel, setCmbModel] = useState(Object.keys(productPrices)[0] || "");
+    const [cmbEbat, setCmbEbat] = useState("");
+    const [txtGelis, setTxtGelis] = useState("");
+    const [txtKargo, setTxtKargo] = useState("180");
+    const [txtPromosyon, setTxtPromosyon] = useState("50");
+    const [txtKar, setTxtKar] = useState("20");
+    const [marketVars, setMarketVars] = useState(
+        Object.keys(MARKETPLACES).reduce((acc, mp) => {
+            acc[mp] = mp === "Trendyol"; // Default Trendyol selected
+            return acc;
+        }, {})
+    );
+    const [calculatedCards, setCalculatedCards] = useState([]);
+
+    useEffect(() => { // Update model options if products change
+        const models = Object.keys(productPrices);
+        if (models.length > 0 && !models.includes(cmbModel)) {
+            setCmbModel(models[0]);
+        } else if (models.length === 0) {
+            setCmbModel("");
+        }
+    }, [productPrices, cmbModel]);
+
+    useEffect(() => { // Auto-update ebat options and fill price when model changes
+        if (cmbModel && productPrices[cmbModel]) {
+            const ebats = Object.keys(productPrices[cmbModel]);
+            if (ebats.length > 0) {
+                setCmbEbat(ebats[0]);
+                setTxtGelis(String(productPrices[cmbModel][ebats[0]] || ""));
+            } else {
+                setCmbEbat("");
+                setTxtGelis("");
+            }
+        } else {
+            setCmbEbat("");
+            setTxtGelis("");
+        }
+    }, [cmbModel, productPrices]);
+
+    useEffect(() => { // Autofill price when ebat changes
+        if (cmbModel && cmbEbat && productPrices[cmbModel] && productPrices[cmbModel][cmbEbat]) {
+            setTxtGelis(String(productPrices[cmbModel][cmbEbat]));
+        } else if (cmbModel && productPrices[cmbModel] && Object.keys(productPrices[cmbModel]).length > 0) {
+            // If ebat is not found but model has ebats, maybe clear or set to first ebat's price
+            // This case is mostly handled by the previous useEffect.
+        } else {
+            // setTxtGelis(""); // Or keep current if user is typing
+        }
+    }, [cmbEbat, cmbModel, productPrices]);
+
+
+    const handleMarketVarChange = (mp) => {
+        setMarketVars(prev => ({ ...prev, [mp]: !prev[mp] }));
+    };
+
+    const calculatePrices = () => {
+        const gelis = parseFloat(txtGelis);
+        const kargo = parseFloat(txtKargo);
+        const promosyon = parseFloat(txtPromosyon);
+        const kar_yuzde_target = parseFloat(txtKar);
+
+        if (isNaN(gelis) || isNaN(kargo) || isNaN(promosyon) || isNaN(kar_yuzde_target)) {
+            alert("Hata: Tüm alanları doğru doldurun!");
+            return;
+        }
+
+        const newCards = [];
+        Object.entries(marketVars).forEach(([mp, selected]) => {
+            if (selected) {
+                const komisyon = MARKETPLACES[mp];
+                const maliyet = gelis + kargo + promosyon;
+                let satis = 0;
+                if ((100 - komisyon - kar_yuzde_target) !== 0) {
+                     satis = maliyet / ((100 - komisyon - kar_yuzde_target) / 100);
+                } else {
+                    // Avoid division by zero, maybe set satis to maliyet or show an error/warning
+                    satis = maliyet; // Or handle as an impossible scenario
+                }
+                const net_kar = satis - maliyet - (satis * komisyon / 100);
+                const kar_orani = maliyet > 0 ? (100 * net_kar / maliyet) : 0;
+
+                newCards.push({
+                    pazaryeri: mp,
+                    ebat: cmbEbat || "N/A",
+                    satis: satis,
+                    kar: net_kar,
+                    kar_yuzde: kar_orani,
+                    komisyon: komisyon,
+                    id: mp + (cmbEbat || "") + Date.now() // Basic unique key
+                });
+            }
+        });
+        setCalculatedCards(newCards);
+    };
+
+    // Ürünler Tab States & Functions
+    const [isAddProductPopupOpen, setIsAddProductPopupOpen] = useState(false);
+    const [newProductModel, setNewProductModel] = useState("");
+    const [newProductEbats, setNewProductEbats] = useState(""); // e.g., "90x190:1780,100x200:2100"
+
+    const handleAddProduct = () => {
+        if (!newProductModel.trim() || !newProductEbats.trim()) {
+            alert("Hata: Lütfen tüm alanları doldurun!");
+            return;
+        }
+        if (productPrices[newProductModel.trim()]) {
+            alert("Hata: Bu model zaten var. Lütfen düzenle menüsünü kullanın.");
+            return;
+        }
+        try {
+            const ebatDict = {};
+            newProductEbats.split(",").forEach(kv => {
+                const [k, v] = kv.split(":");
+                ebatDict[k.trim()] = parseFloat(v.trim());
+                if (isNaN(ebatDict[k.trim()])) throw new Error("Invalid price format");
+            });
+            const updatedProducts = { ...productPrices, [newProductModel.trim()]: ebatDict };
+            saveAllProducts(updatedProducts);
+            alert("Başarılı: Yeni ürün başarıyla eklendi.");
+            setIsAddProductPopupOpen(false);
+            setNewProductModel("");
+            setNewProductEbats("");
+        } catch (e) {
+            alert("Hata: Varyantları doğru formatta girin! (örn: 90x190:1780,100x200:2100)");
+            console.error(e);
+        }
+    };
+
+    const handleEditProduct = () => {
+        const modelToEdit = prompt("Düzenlemek istediğin ürün model adını yaz:");
+        if (!modelToEdit || !productPrices[modelToEdit]) {
+            alert("Hata: Model bulunamadı.");
+            return;
+        }
+        const ebatToEdit = prompt(`${modelToEdit} için düzenlenecek varyantı yaz (örn: 90x190):`);
+        if (!ebatToEdit || !productPrices[modelToEdit][ebatToEdit]) {
+            alert("Hata: Varyant bulunamadı.");
+            return;
+        }
+        const newPriceStr = prompt(`${modelToEdit} - ${ebatToEdit} için yeni geliş fiyatı gir (₺):`);
+        const newPrice = parseFloat(newPriceStr);
+        if (isNaN(newPrice)) {
+            alert("Hata: Geçersiz fiyat girdiniz.");
+            return;
+        }
+
+        const updatedProducts = JSON.parse(JSON.stringify(productPrices)); // Deep copy
+        updatedProducts[modelToEdit][ebatToEdit] = newPrice;
+        saveAllProducts(updatedProducts);
+        alert("Başarılı: Fiyat güncellendi.");
+    };
+
+    const handleDeleteProduct = () => {
+        const modelToDelete = prompt("Silmek istediğin ürün model adını yaz:");
+        if (!modelToDelete || !productPrices[modelToDelete]) {
+            alert("Hata: Model bulunamadı.");
+            return;
+        }
+        const confirmDelete = window.confirm(`"${modelToDelete}" modelinin tamamını silmek için TAMAM'a,\nSadece bir varyant silmek için İPTAL'e tıklayın ve ardından varyant seçin.`);
+
+        const updatedProducts = JSON.parse(JSON.stringify(productPrices)); // Deep copy
+
+        if (confirmDelete) { // Delete whole model
+            delete updatedProducts[modelToDelete];
+            saveAllProducts(updatedProducts);
+            alert("Başarılı: Model ve tüm varyantları silindi.");
+        } else { // Delete specific variant
+            const ebatToDelete = prompt(`${modelToDelete} modelinde silinecek varyantı yaz (örn: 90x190):`);
+            if (!ebatToDelete || !updatedProducts[modelToDelete][ebatToDelete]) {
+                alert("Hata: Varyant bulunamadı.");
+                return;
+            }
+            delete updatedProducts[modelToDelete][ebatToDelete];
+            if (Object.keys(updatedProducts[modelToDelete]).length === 0) { // If no variants left, delete model
+                delete updatedProducts[modelToDelete];
+            }
+            saveAllProducts(updatedProducts);
+            alert("Başarılı: Varyant silindi.");
+        }
+    };
+
+    // AI Strateji Tab States
+    const [txtAiIn, setTxtAiIn] = useState("");
+    const [txtAiOut, setTxtAiOut] = useState("");
+    const aiTabContentRef = useRef(null);
+
+
+    const fillAiPanelFromFiyat = useCallback(() => {
+        const currentModel = cmbModel;
+        const currentEbat = cmbEbat;
+        const selectedPazaryerleri = Object.entries(marketVars)
+            .filter(([,isSelected]) => isSelected)
+            .map(([mp]) => mp);
+        const currentGelis = txtGelis;
+        const currentKargo = txtKargo;
+        const currentPromosyon = txtPromosyon;
+        const currentKarYuzde = txtKar;
+        let calculatedSatisFiyati = "";
+
+        try {
+            const gelis_f = parseFloat(currentGelis);
+            const kargo_f = parseFloat(currentKargo);
+            const promosyon_f = parseFloat(currentPromosyon);
+            const kar_f = parseFloat(currentKarYuzde);
+            const komisyon = selectedPazaryerleri.length > 0 ? MARKETPLACES[selectedPazaryerleri[0]] : 0;
+            const maliyet = gelis_f + kargo_f + promosyon_f;
+            if ((100 - komisyon - kar_f) !== 0) {
+                const satis = maliyet / ((100 - komisyon - kar_f) / 100);
+                calculatedSatisFiyati = `${satis.toFixed(2)} ₺`;
+            }
+        } catch {
+            // ignore if parsing fails, keep satis_fiyati empty
+        }
+
+        const prompt = (
+            `Ürün: ${currentModel || "Belirtilmemiş Model"}\n`+
+            `Ölçü: ${currentEbat || "Belirtilmemiş Varyant"}\n`+
+            `Pazaryeri: ${selectedPazaryerleri.join(', ') || "Seçilmedi"}\n`+
+            `Geliş fiyatı: ${currentGelis || "N/A"} ₺\n`+
+            `Kargo: ${currentKargo || "N/A"} ₺\n`+
+            `Promosyon: ${currentPromosyon || "N/A"} ₺\n`+
+            `Kâr hedefi: %${currentKarYuzde || "N/A"}\n`+
+            `Önerilen satış fiyatı (hesaplanan): ${calculatedSatisFiyati || "Hesaplanamadı"}\n`+
+            `\n`+
+            `Lütfen aşağıdaki konularda B2B satış danışmanı olarak detaylı ve uygulanabilir tavsiyeler verin:\n`+
+            `1. Rakip Analizi: Trendyol, Hepsiburada, N11 gibi pazaryerlerinde bu ürüne ({model: ${currentModel || "?"}, ebat: ${currentEbat || "?"}}) benzer ürünleri hangi firmalar, hangi fiyat aralıklarında satıyor? Genel pazar rekabet düzeyi nedir?\n`+
+            `2. Fiyat Stratejisi: Yukarıdaki verilere ve rekabet analizine göre, bu ürün için optimum satış fiyat aralığı ne olmalı? Fiyatlandırmada dikkat edilmesi gerekenler nelerdir?\n`+
+            `3. Reklam ve Promosyon Önerileri: Bu ürünü (yatak kategorisinde olduğunu varsayarak) pazarlamak için en etkili reklam ve promosyon stratejileri nelerdir? (Trendyol, Google Ads, Sosyal Medya odaklı)\n`+
+            `4. Düşük Bütçeli Lansman: Yeni çıkan bir yatak ürününü düşük bütçeyle hızlıca üst sıralara taşımak ve görünürlüğünü artırmak için spesifik reklam kanalları, anahtar kelimeler ve taktikler (maddeler halinde).\n`+
+            `5. Influencer Marketing: Yatak satışı için hangi tür influencer'larla nasıl işbirlikleri yapılabilir? Beklenen yatırım getirisi (ROI) nasıl maksimize edilir?\n`+
+            `Lütfen tüm yanıtları madde madde, net ve pratik önerilerle sunun.`
+        );
+        setTxtAiIn(prompt);
+    }, [cmbModel, cmbEbat, marketVars, txtGelis, txtKargo, txtPromosyon, txtKar]);
+
+    useEffect(() => { // Auto-fill AI panel when Fiyat Hesapla inputs change
+        if(activeTab === "AI Strateji") { // Only fill if AI tab is active or becomes active
+           fillAiPanelFromFiyat();
+        }
+    }, [activeTab, fillAiPanelFromFiyat]);
+
+
+    const getAiSuggestion = async (promptType = "general") => {
+        let currentPrompt = txtAiIn.trim();
+        if (!currentPrompt && promptType !== "price_suggestion") {
+            alert("Uyarı: Lütfen soru veya veri girin!");
+            return;
+        }
+        if (!openAIKey) {
+            alert("API Key Gerekli: AI özelliği için Ayarlar sekmesinden OpenAI API anahtarınızı girin.");
+            setActiveTab("Ayarlar");
+            return;
+        }
+
+        if (promptType === "price_suggestion") {
+            const baseInfo = `Ürün: ${cmbModel || "Belirtilmemiş Model"}, Ölçü: ${cmbEbat || "Belirtilmemiş Varyant"}, Geliş Fiyatı: ${txtGelis || "N/A"} ₺, Kargo: ${txtKargo || "N/A"} ₺, Promosyon: ${txtPromosyon || "N/A"} ₺.`;
+            currentPrompt = `${baseInfo}\n\nMevcut pazar koşulları, rekabet (Türkiye yatak pazarı), ve potansiyel müşteri talebini göz önünde bulundurarak, bu ürün için en yüksek talep ve kârı getirebilecek **optimal satış fiyat aralığını** ve bu fiyatı belirlerken kullanılabilecek **stratejileri** detaylıca analiz edip önerin. Pazaryeri komisyonlarını da (%18-%21 aralığında düşünün) hesaba katın. Yanıtı net rakamlar ve gerekçelerle sunun.`;
+            setTxtAiIn(currentPrompt); // Update the input field as well
+        }
+
+
+        setTxtAiOut("Yükleniyor... AI düşünüyor...");
+        try {
+            // NOTE: This is a client-side call. For production, use a backend proxy.
+            const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${openAIKey}`
+                },
+                body: JSON.stringify({
+                    model: "gpt-3.5-turbo", // or gpt-4 if available and preferred
+                    messages: [
+                        { role: "system", content: "Bir B2B e-ticaret ve pazarlama stratejisti gibi yanıtla. Rakip fiyatları, pazar rekabetini, satış ipuçlarını ve kısa, uygulanabilir önerileri özellikle belirt. Türkiye pazarına odaklan." },
+                        { role: "user", content: currentPrompt }
+                    ],
+                    max_tokens: 1500, // Increased for potentially more detailed responses
+                    temperature: 0.7, // Balances creativity and determinism
+                })
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`OpenAI API Error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+            }
+            const data = await response.json();
+            if (data.choices && data.choices.length > 0 && data.choices[0].message) {
+                setTxtAiOut(data.choices[0].message.content);
+            } else {
+                setTxtAiOut("Hata: AI'dan geçerli bir yanıt alınamadı.");
+            }
+        } catch (e) {
+            console.error("OpenAI API call failed:", e);
+            setTxtAiOut(`Hata: ${e.message}\n\nAPI Anahtarınızı ve internet bağlantınızı kontrol edin. Konsola bakın.`);
+        }
+    };
+
+    // Excel Export Tab
+    const [isExportPopupOpen, setIsExportPopupOpen] = useState(false);
+    const [exportMarketVars, setExportMarketVars] = useState(
+        Object.keys(MARKETPLACES).reduce((acc, mp) => ({ ...acc, [mp]: true }), {})
+    );
+    const [exportProductVars, setExportProductVars] = useState(
+        Object.keys(productPrices).reduce((acc, model) => ({ ...acc, [model]: true }), {})
+    );
+    useEffect(() => { // Keep exportProductVars in sync with productPrices
+      setExportProductVars(Object.keys(productPrices).reduce((acc, model) => ({...acc, [model]: true }), {}));
+    }, [productPrices]);
+
+    const [exportKargo, setExportKargo] = useState("180");
+    const [exportPromo, setExportPromo] = useState("50");
+    const [exportKar, setExportKar] = useState("20");
+
+
+    const handleExportToExcel = () => {
+        const selectedMarkets = Object.entries(exportMarketVars).filter(([,v]) => v).map(([k]) => k);
+        const selectedProducts = Object.entries(exportProductVars).filter(([,v]) => v).map(([k]) => k);
+
+        if (selectedMarkets.length === 0 || selectedProducts.length === 0) {
+            alert("Hata: En az bir pazaryeri ve ürün seçmelisiniz!");
+            return;
+        }
+        const kargo = parseFloat(exportKargo);
+        const promo = parseFloat(exportPromo);
+        const karYuzdeTarget = parseFloat(exportKar);
+        if (isNaN(kargo) || isNaN(promo) || isNaN(karYuzdeTarget)) {
+            alert("Hata: Kargo/promosyon/kâr değerlerini kontrol edin!");
+            return;
+        }
+
+        const dataToExport = [];
+        selectedProducts.forEach(model => {
+            if (productPrices[model]) {
+                Object.entries(productPrices[model]).forEach(([ebat, gelis]) => {
+                    selectedMarkets.forEach(mp => {
+                        const komisyon = MARKETPLACES[mp];
+                        const maliyet = gelis + kargo + promo;
+                        let satis = 0;
+                        if ((100 - komisyon - karYuzdeTarget) !== 0) {
+                            satis = maliyet / ((100 - komisyon - karYuzdeTarget) / 100);
+                        } else {
+                            satis = maliyet; // Avoid division by zero
+                        }
+                        const netKar = satis - maliyet - (satis * komisyon / 100);
+                        const karOrani = maliyet > 0 ? (100 * netKar / maliyet) : 0;
+                        dataToExport.push({
+                            "Model": model,
+                            "Varyant": ebat,
+                            "Geliş Fiyatı": gelis,
+                            "Kargo": kargo,
+                            "Promosyon": promo,
+                            "Maliyet": parseFloat(maliyet.toFixed(2)),
+                            "Satış Fiyatı (Hedeflenen)": parseFloat(satis.toFixed(2)),
+                            "Net Kâr (Hedeflenen)": parseFloat(netKar.toFixed(2)),
+                            "Kâr Marjı (%) (Hedeflenen)": parseFloat(karOrani.toFixed(1)),
+                            "Pazaryeri Komisyon Oranı (%)": komisyon,
+                            "Pazaryeri": mp
+                        });
+                    });
+                });
+            }
+        });
+
+        if (dataToExport.length === 0) {
+            alert("Uyarı: Dışa aktarılacak veri yok!");
+            return;
+        }
+
+        // Using a library like 'xlsx' (SheetJS) would be ideal here
+        // Example with SheetJS (make sure to install it: yarn add xlsx):
+        /*
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "FiyatListesi");
+        XLSX.writeFile(workbook, "Razzoni_Fiyat_Listesi.xlsx");
+        */
+        // Fallback to CSV for simplicity if XLSX is not set up:
+        const headers = Object.keys(dataToExport[0]);
+        const csvContent = "data:text/csv;charset=utf-8,"
+            + headers.join(",") + "\n"
+            + dataToExport.map(row => headers.map(header => `"${String(row[header]).replace(/"/g, '""')}"`).join(",")).join("\n");
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "Razzoni_Fiyat_Listesi.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        alert("Başarılı: Veri CSV olarak indirildi! (Excel için bir kütüphane entegre edilebilir.)");
+        setIsExportPopupOpen(false);
+    };
+
+
+    // Ayarlar Tab
+    const [apiKeyInput, setApiKeyInput] = useState(openAIKey);
+    const handleSaveApiKey = () => {
+        setOpenAIKey(apiKeyInput);
+        saveApiKeyToStorage(apiKeyInput);
+        alert("Başarılı: API Key kaydedildi.");
+    };
+
+
+    const renderTabContent = () => {
+        switch (activeTab) {
+            case "Fiyat Hesapla":
+                return (
+                    <div style={{ display: 'flex', gap: '20px', height: 'calc(100vh - 150px)' }}>
+                        <OnboardingInfo
+                            message="Fiyat Hesapla Sekmesi: Ürün maliyetlerinizi girip, pazaryerlerine göre satış fiyatı ve kârınızı hesaplayın."
+                            storageKey="onboarding_fiyat_hesapla_seen"
+                        />
+                        <div className="ctk-frame" style={{ width: '300px', flexShrink: 0, overflowY: 'auto' }}>
+                            <label className="ctk-label" style={{ fontSize: '16px', fontWeight: 'bold' }}>Ürün Modeli</label>
+                            <select className="ctk-combo" value={cmbModel} onChange={e => setCmbModel(e.target.value)}>
+                                <option value="">Model Seçin</option>
+                                {Object.keys(productPrices).map(model => (
+                                    <option key={model} value={model}>{model}</option>
+                                ))}
+                            </select>
+
+                            <label className="ctk-label" style={{ fontSize: '16px', fontWeight: 'bold' }}>Ölçü (Varyant)</label>
+                            <select className="ctk-combo" value={cmbEbat} onChange={e => setCmbEbat(e.target.value)}>
+                                <option value="">Ölçü Seçin</option>
+                                {cmbModel && productPrices[cmbModel] && Object.keys(productPrices[cmbModel]).map(ebat => (
+                                    <option key={ebat} value={ebat}>{ebat}</option>
+                                ))}
+                            </select>
+
+                            <input className="ctk-entry" type="number" placeholder="Geliş Fiyatı (₺)" value={txtGelis} onChange={e => setTxtGelis(e.target.value)} />
+                            <input className="ctk-entry" type="number" placeholder="Kargo Fiyatı (₺)" value={txtKargo} onChange={e => setTxtKargo(e.target.value)} />
+                            <input className="ctk-entry" type="number" placeholder="Promosyon Gideri (₺)" value={txtPromosyon} onChange={e => setTxtPromosyon(e.target.value)} />
+                            <input className="ctk-entry" type="number" placeholder="Kâr Yüzdesi (%)" value={txtKar} onChange={e => setTxtKar(e.target.value)} />
+
+                            <label className="ctk-label" style={{ fontSize: '15px', fontWeight: 'bold', marginTop: '12px' }}>Pazaryerleri</label>
+                            {Object.keys(MARKETPLACES).map(mp => (
+                                <div key={mp} style={{ marginBottom: '5px' }}>
+                                    <input type="checkbox" id={`chk-${mp}`} checked={marketVars[mp]} onChange={() => handleMarketVarChange(mp)} style={{ marginRight: '8px' }} />
+                                    <label htmlFor={`chk-${mp}`}>{mp}</label>
+                                </div>
+                            ))}
+                            <button className="ctk-button ctk-button-primary" onClick={calculatePrices} style={{ marginTop: '15px', width: '100%' }}>HESAPLA</button>
+                             {/* Ad/Promo Banner Placeholder */}
+                            <div className="ad-banner-placeholder" style={{marginTop: '30px'}}>
+                                ✨ Özel Teklif Alanı ✨ <br/> Razzoni Yataklarında %20 İndirim!
+                            </div>
+                        </div>
+                        <div className="fiyat-card-grid" style={{ flexGrow: 1 }}>
+                            {calculatedCards.length === 0 && <p>Hesaplama yapmak için soldaki formu doldurun.</p>}
+                            {calculatedCards.map((cardData) => (
+                                <FiyatCard key={cardData.id} data={cardData} />
+                            ))}
+                        </div>
+                    </div>
+                );
+            case "Ürünler":
+                return (
+                    <div>
+                        <OnboardingInfo
+                            message="Ürünler Sekmesi: Ürünlerinizi ve varyantlarını listeleyin, ekleyin, düzenleyin veya silin."
+                            storageKey="onboarding_urunler_seen"
+                        />
+                        <div className="products-table">
+                            {Object.keys(productPrices).length === 0 && <p>Henüz ürün eklenmemiş.</p>}
+                            {Object.entries(productPrices).map(([model, ebats]) => (
+                                <div key={model}>
+                                    <div className="product-model-header">{`Model: ${model}`}</div>
+                                    {Object.entries(ebats).map(([ebat, fiyat]) => (
+                                        <div key={`${model}-${ebat}`} className="product-variant-item">
+                                            {`• ${ebat}   ➔   ${fiyat} ₺`}
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="button-group">
+                            <button className="ctk-button ctk-button-success" onClick={() => setIsAddProductPopupOpen(true)}>➕ Yeni Ürün Ekle</button>
+                            <button className="ctk-button ctk-button-warning" onClick={handleEditProduct}>✏️ Ürün/Varyant Düzenle</button>
+                            <button className="ctk-button ctk-button-danger" onClick={handleDeleteProduct}>🗑️ Ürün/Varyant Sil</button>
+                            {/* Save is implicit with state updates to localStorage */}
+                        </div>
+
+                        {isAddProductPopupOpen && (
+                            <div className="modal-overlay">
+                                <div className="modal-content">
+                                    <h3>Yeni Ürün Ekle</h3>
+                                    <label htmlFor="newModel">Ürün Model Adı:</label>
+                                    <input type="text" id="newModel" className="ctk-entry" value={newProductModel} onChange={e => setNewProductModel(e.target.value)} />
+                                    <label htmlFor="newEbats">Varyant/Fiyat (örn: 90x190:1780,100x200:2100)</label>
+                                    <input type="text" id="newEbats" className="ctk-entry" value={newProductEbats} onChange={e => setNewProductEbats(e.target.value)} />
+                                    <div className="modal-buttons">
+                                        <button className="ctk-button" onClick={() => setIsAddProductPopupOpen(false)}>İptal</button>
+                                        <button className="ctk-button ctk-button-success" onClick={handleAddProduct}>Kaydet</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            case "AI Strateji":
+                return (
+                    <div ref={aiTabContentRef}>
+                        <OnboardingInfo
+                            message="AI Strateji Sekmesi: Fiyat bilgilerini yükleyip OpenAI'dan pazar, fiyat ve reklam stratejileri hakkında tavsiye alın."
+                            storageKey="onboarding_ai_strateji_seen"
+                        />
+                        <h2 style={{ textAlign: 'center', margin: '20px 0' }}>🤖 AI Destekli Strateji ve Tavsiye Paneli</h2>
+                        <textarea
+                            className="ctk-textbox"
+                            rows="10"
+                            value={txtAiIn}
+                            onChange={e => setTxtAiIn(e.target.value)}
+                            placeholder="AI'ye sormak istediğiniz pazar araştırması, rakip analizi veya strateji sorularını buraya yazın..."
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', margin: '10px 0' }}>
+                            <button className="ctk-button ctk-button-primary" onClick={fillAiPanelFromFiyat}>Fiyat Bilgilerini Otomatik Yükle</button>
+                            <button className="ctk-button ctk-button-primary" onClick={() => getAiSuggestion("general")}>Tavsiye Al (OpenAI)</button>
+                            <button className="ctk-button ctk-button-success" onClick={() => getAiSuggestion("price_suggestion")}>🎯 En İyi Fiyatı Öner (AI)</button>
+                        </div>
+                        <textarea
+                            className="ctk-textbox"
+                            rows="15"
+                            value={txtAiOut}
+                            readOnly
+                            placeholder="AI'dan gelen yanıt burada görünecek..."
+                        />
+                    </div>
+                );
+            case "Excel Aktar":
+                 return (
+                    <div>
+                        <OnboardingInfo
+                            message="Excel Aktar Sekmesi: Seçtiğiniz ürün ve pazaryerleri için hesaplanmış fiyat listesini dışa aktarın."
+                            storageKey="onboarding_excel_aktar_seen"
+                        />
+                        <h2 style={{ textAlign: 'center', margin: '30px 0' }}>Excel'e Gelişmiş Aktarım</h2>
+                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                            <button className="ctk-button ctk-button-primary" style={{padding: '12px 24px', fontSize: '16px'}} onClick={() => setIsExportPopupOpen(true)}>
+                                📥 Seçerek Excel/CSV'ye Aktar
+                            </button>
+                        </div>
+
+                        {isExportPopupOpen && (
+                            <div className="modal-overlay">
+                                <div className="modal-content" style={{maxWidth: '600px'}}>
+                                    <h3>Excel/CSV'ye Aktarım Seçimi</h3>
+                                    <div style={{display: 'flex', gap: '20px'}}>
+                                        <div style={{flex: 1}}>
+                                            <h4>Pazaryeri Seçimi (Çoklu)</h4>
+                                            {Object.keys(MARKETPLACES).map(mp => (
+                                                <div key={`exp-mp-${mp}`}>
+                                                    <input type="checkbox" id={`exp-chk-mp-${mp}`} checked={!!exportMarketVars[mp]} onChange={() => setExportMarketVars(prev => ({...prev, [mp]: !prev[mp]}))} />
+                                                    <label htmlFor={`exp-chk-mp-${mp}`}>{mp}</label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div style={{flex: 1}}>
+                                            <h4>Ürün Modelleri (Çoklu)</h4>
+                                            {Object.keys(productPrices).map(model => (
+                                                <div key={`exp-prod-${model}`}>
+                                                    <input type="checkbox" id={`exp-chk-prod-${model}`} checked={!!exportProductVars[model]} onChange={() => setExportProductVars(prev => ({...prev, [model]: !prev[model]}))} />
+                                                    <label htmlFor={`exp-chk-prod-${model}`}>{model}</label>
+                                                </div>
+                                            ))}
+                                             {Object.keys(productPrices).length === 0 && <p>Aktarılacak ürün yok. Lütfen önce ürün ekleyin.</p>}
+                                        </div>
+                                    </div>
+                                    <hr style={{margin: '20px 0', borderColor: '#30363d'}}/>
+                                    <div>
+                                        <label>Kargo Fiyatı (₺) (her ürün için):</label>
+                                        <input className="ctk-entry" type="number" value={exportKargo} onChange={e => setExportKargo(e.target.value)} />
+                                        <label>Promosyon Gideri (₺):</label>
+                                        <input className="ctk-entry" type="number" value={exportPromo} onChange={e => setExportPromo(e.target.value)} />
+                                        <label>Kâr Yüzdesi (%):</label>
+                                        <input className="ctk-entry" type="number" value={exportKar} onChange={e => setExportKar(e.target.value)} />
+                                    </div>
+                                    <div className="modal-buttons">
+                                        <button className="ctk-button" onClick={() => setIsExportPopupOpen(false)}>İptal</button>
+                                        <button className="ctk-button ctk-button-success" onClick={handleExportToExcel}>Aktar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            case "Geçmiş":
+                return (
+                     <div>
+                        <OnboardingInfo
+                            message="Geçmiş Sekmesi: Bu alan gelecekteki geliştirmeler için planlanmıştır (örn: kaydedilmiş hesaplamalar, AI sorguları)."
+                            storageKey="onboarding_gecmis_seen"
+                        />
+                        <h2 style={{ textAlign: 'center', margin: '30px 0' }}>🕓 Geçmiş – Son Teklifler (Geliştirilecek)</h2>
+                        <p style={{textAlign: 'center'}}>Bu özellik yakında eklenecektir. Kaydedilmiş hesaplamalarınızı ve AI analizlerinizi burada bulabileceksiniz.</p>
+                    </div>
+                );
+            case "Ayarlar":
+                return (
+                     <div>
+                        <OnboardingInfo
+                            message="Ayarlar Sekmesi: OpenAI API anahtarınızı kaydedin ve uygulama temasını değiştirin."
+                            storageKey="onboarding_ayarlar_seen"
+                        />
+                        <h2 style={{ textAlign: 'center', margin: '20px 0' }}>⚙️ Ayarlar</h2>
+                        <div style={{ maxWidth: '500px', margin: '0 auto' }}>
+                            <label className="ctk-label" style={{fontSize: '15px'}}>OpenAI API Key:</label>
+                            <input
+                                type="password"
+                                className="ctk-entry"
+                                value={apiKeyInput}
+                                onChange={e => setApiKeyInput(e.target.value)}
+                                placeholder="OpenAI API Anahtarınızı buraya girin"
+                            />
+                            <button className="ctk-button ctk-button-primary" onClick={handleSaveApiKey} style={{marginTop: '5px'}}>Kaydet</button>
+
+                            <label className="ctk-label" style={{fontSize: '15px', marginTop: '30px'}}>Tema:</label>
+                            <button className="ctk-button" onClick={toggleTheme} style={{backgroundColor: theme === 'Dark' ? '#58a6ff' : '#6e7681', color: 'white'}}>
+                                {theme === 'Dark' ? 'Açık Mod' : 'Gece Modu'} Kullan
+                            </button>
+                        </div>
+                    </div>
+                );
+            default:
+                return null;
+        }
+    };
+
+    const tabs = ["Fiyat Hesapla", "Ürünler", "AI Strateji", "Excel Aktar", "Geçmiş", "Ayarlar"];
+
+    return (
+        <>
+            <style>{styles}</style>
+            <div className="app-container" style={{ backgroundColor: theme === 'Dark' ? '#0d1117' : '#f0f0f0', color: theme === 'Dark' ? '#c9d1d9' : '#24292e' }}>
+                <h1 style={{ textAlign: 'center', color: theme === 'Dark' ? '#58a6ff' : '#0366d6', margin: '10px 0 15px 0' }}>
+                    🛏️ Razzoni Ultra Gelişmiş Fiyat Paneli (React Version)
+                </h1>
+                <nav className="tabs-nav" style={{backgroundColor: theme === 'Dark' ? '#161b22' : '#f6f8fa', borderColor: theme === 'Dark' ? '#30363d' : '#e1e4e8'}}>
+                    {tabs.map(tabName => (
+                        <button
+                            key={tabName}
+                            className={`tab-button ${activeTab === tabName ? 'active' : ''}`}
+                            onClick={() => setActiveTab(tabName)}
+                            style={activeTab === tabName ?
+                                {backgroundColor: theme === 'Dark' ? '#238636' : '#0366d6', color: 'white'} :
+                                {color: theme === 'Dark' ? '#8b949e' : '#586069', backgroundColor: 'transparent'}
+                            }
+                        >
+                            {tabName}
+                        </button>
+                    ))}
+                </nav>
+                <main className="tab-content" style={{backgroundColor: theme === 'Dark' ? '#161b22' : '#ffffff', color: theme === 'Dark' ? '#c9d1d9' : '#24292e'}}>
+                    {renderTabContent()}
+                </main>
+            </div>
+
+            {/* Welcome Tour Modal */}
+            {showWelcomeTour && welcomeTourSteps[currentTourStep] && (
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{textAlign: 'center'}}>
+                        <h3>{welcomeTourSteps[currentTourStep].title}</h3>
+                        <p>{welcomeTourSteps[currentTourStep].text}</p>
+                        <button className="ctk-button ctk-button-primary" onClick={handleNextTourStep}>
+                            {currentTourStep === welcomeTourSteps.length - 1 ? "Bitir" : "Sonraki"}
+                        </button>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
+
+export default App;
