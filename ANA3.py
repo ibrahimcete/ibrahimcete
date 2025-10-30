@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+"""
+🚀 B2B OTOMASYON MOTORU v4.0 - ULTRA-MODERN EDITION
+Gelişmiş arayüz, glassmorphism, animasyonlar ve modern tasarım
+"""
 
 import sys
 import threading
@@ -11,6 +15,20 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, Slot, QThread, QObject, QPropertyAnimation, QEasingCurve, QTimer, QSize, QPointF
 from PySide6.QtGui import QPalette, QColor, QFont, QPainter, QLinearGradient, QPixmap, QRadialGradient, QKeySequence, QShortcut
+
+# 🎨 Modern UI Components
+try:
+    from modern_ui_components import (
+        GlassCard, NeumorphicCard, AnimatedStatCard, GradientButton,
+        FloatingActionButton, CircularProgress, PulseLoader, show_toast
+    )
+    from design_system import Theme, ColorPalette, Typography, PresetThemes, set_theme
+    from advanced_animations import AnimationPresets, ParticleEmitter, RippleEffect
+    from modern_dashboard import MetricCard, SparklineChart, DonutChart, LiveStatsWidget
+    MODERN_UI_AVAILABLE = True
+except ImportError:
+    MODERN_UI_AVAILABLE = False
+    print("⚠️ Modern UI bileşenleri yüklenemedi - standart arayüz kullanılacak")
 try:
     import speech_recognition as sr  # Opsiyonel: tek seferlik kayıt için
     _SR_AVAILABLE = True
@@ -274,7 +292,7 @@ class AutomationGUI(QMainWindow):
     """
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("🚀 B2B Otomasyon Motoru v3.0 - Kontrol Paneli")
+        self.setWindowTitle("🚀 B2B Otomasyon Motoru v4.0 - Ultra-Modern Edition")
         self.setGeometry(100, 100, 1400, 900)
         self.setMinimumSize(1200, 800)
 
@@ -424,28 +442,48 @@ class AutomationGUI(QMainWindow):
         else:
             self.update_log_display("ℹ️ Main2 özellikleri kullanılamıyor")
 
-        # Havalı fade + scale (büyüme) animasyonu
+        # 🎨 Modern UI Tema Sistemi
+        if MODERN_UI_AVAILABLE:
+            self.modern_theme = PresetThemes.dark_purple()
+            set_theme(self.modern_theme)
+
+            # Particle Emitter
+            self.particle_emitter = ParticleEmitter(self)
+            self.particle_emitter.setGeometry(0, 0, self.width(), self.height())
+            self.particle_emitter.raise_()
+
+            # Ripple Effect
+            self.ripple_effect = RippleEffect(self)
+            self.ripple_effect.setGeometry(0, 0, self.width(), self.height())
+            self.ripple_effect.raise_()
+
+            # Welcome toast (delayed)
+            QTimer.singleShot(1500, lambda: show_toast(
+                self, "🎉 Ultra-Modern Dashboard Yüklendi!", "success"
+            ))
+
+        # 💫 Ultra-smooth fade + scale animasyonu
         try:
             self.setWindowOpacity(0.0)
             self.resize(0, 0)
 
             # Fade efekti
             self._fade_anim = QPropertyAnimation(self, b"windowOpacity")
-            self._fade_anim.setDuration(1000)
+            self._fade_anim.setDuration(1200)
             self._fade_anim.setStartValue(0.0)
             self._fade_anim.setEndValue(1.0)
             self._fade_anim.setEasingCurve(QEasingCurve.OutCubic)
 
-            # Boyut animasyonu
-            start_size = QSize(int(self.width() * 0.85), int(self.height() * 0.85))
+            # Boyut animasyonu - daha smooth
+            start_size = QSize(int(self.width() * 0.80), int(self.height() * 0.80))
             end_size = self.size()
             self._size_anim = QPropertyAnimation(self, b"size")
-            self._size_anim.setDuration(1000)
+            self._size_anim.setDuration(1200)
             self._size_anim.setStartValue(start_size)
             self._size_anim.setEndValue(end_size)
             self._size_anim.setEasingCurve(QEasingCurve.OutBack)
 
-            # Animasyonları birlikte oynat (PySide6 ile tür uyumlu)
+            # Animasyonları birlikte oynat
             from PySide6.QtCore import QParallelAnimationGroup
             self._anim_group = QParallelAnimationGroup()
             self._anim_group.addAnimation(self._fade_anim)
@@ -534,17 +572,27 @@ class AutomationGUI(QMainWindow):
         header.setStyleSheet("font-size: 16px; font-weight: bold; color: white; padding: 10px;")
         layout.addWidget(header)
 
-        # İstatistik Kartları
+        # 🎨 İstatistik Kartları - Ultra-Modern
         stats_container = QWidget()
         stats_layout = QVBoxLayout(stats_container)
-        stats_layout.setSpacing(12)
+        stats_layout.setSpacing(15)
 
-        self.stat_cards = {
-            'found': StatCard("🔍 Bulunan Firma", "0", "#5858D6"),    # Mor
-            'analyzed': StatCard("📊 Analiz Edilen", "0", "#30A24C"), # Yeşil
-            'sent': StatCard("📧 Gönderilen Email", "0", "#CA7137"),  # Turuncu
-            'completed': StatCard("✅ Tamamlanan İş", "0", "#C43D4B") # Kırmızı
-        }
+        if MODERN_UI_AVAILABLE:
+            # Modern AnimatedStatCard kullan
+            self.stat_cards = {
+                'found': AnimatedStatCard("🔍", "Bulunan Firma", 0, ColorPalette.PRIMARY),
+                'analyzed': AnimatedStatCard("📊", "Analiz Edilen", 0, ColorPalette.SECONDARY),
+                'sent': AnimatedStatCard("📧", "Gönderilen Email", 0, ColorPalette.ACCENT),
+                'completed': AnimatedStatCard("✅", "Tamamlanan İş", 0, "#C43D4B")
+            }
+        else:
+            # Fallback: Eski kartlar
+            self.stat_cards = {
+                'found': StatCard("🔍 Bulunan Firma", "0", "#5858D6"),
+                'analyzed': StatCard("📊 Analiz Edilen", "0", "#30A24C"),
+                'sent': StatCard("📧 Gönderilen Email", "0", "#CA7137"),
+                'completed': StatCard("✅ Tamamlanan İş", "0", "#C43D4B")
+            }
 
         for card in self.stat_cards.values():
             stats_layout.addWidget(card)
@@ -556,31 +604,37 @@ class AutomationGUI(QMainWindow):
         quick_header.setStyleSheet("font-size: 14px; font-weight: bold; color: white; padding: 10px 0;")
         layout.addWidget(quick_header)
 
-        # Hızlı komut butonları
+        # 🚀 Hızlı komut butonları - Ultra-Modern
         quick_buttons = [
-            ("🏢 Kayseri Mobilya", "#5858D6", 
+            ("Kayseri Mobilya", "🏢", ColorPalette.GRADIENTS["purple_blue"],
              "Kayseri'deki mobilya firmalarını bul, analiz et ve 'Yaz Tanıtımı' kampanyasını gönder"),
-            ("💻 Ankara Yazılım", "#30A24C", 
+            ("Ankara Yazılım", "💻", ColorPalette.GRADIENTS["green_blue"],
              "Ankara'daki yazılım firmalarını bul ve 'Yeni Teklif' kampanyasını gönder"),
-            ("🏭 İstanbul İmalat", "#CA7137", 
+            ("İstanbul İmalat", "🏭", ColorPalette.GRADIENTS["orange_red"],
              "İstanbul'daki imalat firmalarını bul ve analiz et"),
         ]
 
-        for text, color, command in quick_buttons:
-            btn = ModernButton(text, color)
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {color};
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    padding: 12px;
-                    font-size: 13px;
-                    font-weight: bold;
-                    text-align: left;
-                }}
-                QPushButton:hover {{
-                    background-color: {self._lighten_color(color)};
+        for text, icon, gradient, command in quick_buttons:
+            if MODERN_UI_AVAILABLE:
+                btn = GradientButton(text, icon, gradient)
+                btn.clicked.connect(lambda checked, cmd=command: self._quick_command(cmd))
+                layout.addWidget(btn)
+            else:
+                # Fallback
+                btn = ModernButton(f"{icon} {text}", gradient[0] if gradient else "#5858D6")
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {gradient[0] if gradient else '#5858D6'};
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        padding: 12px;
+                        font-size: 13px;
+                        font-weight: bold;
+                        text-align: left;
+                    }}
+                    QPushButton:hover {{
+                        background-color: {self._lighten_color(gradient[0] if gradient else '#5858D6')};
                 }}
                 QPushButton:pressed {{
                     background-color: {self._darken_color(color)};
@@ -1545,19 +1599,28 @@ class AutomationGUI(QMainWindow):
             self.update_statistics()
 
     def update_statistics(self):
-        """İstatistik kartlarını güncelle"""
+        """📊 İstatistik kartlarını güncelle - Modern UI uyumlu"""
         if hasattr(self, 'engine') and self.engine and self.engine.is_ready and self.engine.orchestrator:
             status = self.engine.orchestrator.get_workflow_status()
             details = status.get('details', {})
             found = len(details.get('found_firms', []))
             analyzed = len(details.get('analyzed_firms', []))
             sent = len(details.get('sent_emails', []))
+
+            # Modern kartlar için update
             self.stat_cards['found'].update_value(found)
             self.stat_cards['analyzed'].update_value(analyzed)
             self.stat_cards['sent'].update_value(sent)
+
             if status.get('status') == 'completed':
-                current = int(self.stat_cards['completed'].value_label.text())
-                self.stat_cards['completed'].update_value(current + 1)
+                if MODERN_UI_AVAILABLE:
+                    # AnimatedStatCard için
+                    current = self.stat_cards['completed'].target_value
+                    self.stat_cards['completed'].update_value(current + 1)
+                else:
+                    # Eski StatCard için
+                    current = int(self.stat_cards['completed'].value_label.text())
+                    self.stat_cards['completed'].update_value(current + 1)
 
     def refresh_workflow_table(self, details):
         """İş akışı tablosunu güncelle"""
@@ -2330,8 +2393,11 @@ class AutomationGUI(QMainWindow):
             return False
 
     def apply_modern_styles(self):
-        """Modern ve renkli stil uygulaması"""
-        self.setStyleSheet("""
+        """🎨 Ultra-Modern Tema Sistemi"""
+        # Modern tema kullan
+        if MODERN_UI_AVAILABLE:
+            stylesheet = self.modern_theme.to_stylesheet()
+            self.setStyleSheet(stylesheet + """
             QMainWindow {
                 background-color: #0f0f1e;
             }
@@ -2561,6 +2627,12 @@ class AutomationGUI(QMainWindow):
             self.automation_builder = None
         except Exception:
             pass
+
+    def mousePressEvent(self, event):
+        """🌊 Mouse click → Ripple Effect"""
+        if MODERN_UI_AVAILABLE and hasattr(self, 'ripple_effect'):
+            self.ripple_effect.create_ripple(event.pos().x(), event.pos().y())
+        super().mousePressEvent(event)
 
     def closeEvent(self, event):
         """Pencere kapanırken kaynakları güvenli şekilde kapat."""
