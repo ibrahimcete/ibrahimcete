@@ -1,0 +1,8 @@
+{
+  "learning_rate": 50,
+  "confidence_threshold": 70,
+  "auto_optimize": true,
+  "monitoring_interval": 5,
+  "max_memory": 1000,
+  "auto_cleanup": true
+}

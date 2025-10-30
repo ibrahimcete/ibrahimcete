@@ -1,0 +1,276 @@
+{
+  "advanced_welcome": {
+    "id": "advanced_welcome",
+    "name": "Gelişmiş Hoşgeldin Serisi",
+    "description": "AI destekli kişiselleştirilmiş hoşgeldin kampanyası",
+    "version": "2.0.0",
+    "tags": [
+      "onboarding",
+      "welcome",
+      "ai"
+    ],
+    "status": "inactive",
+    "blocks": [
+      {
+        "id": "trigger_new_firm",
+        "type": "trigger",
+        "title": "Yeni Firma Eklendi",
+        "trigger_type": "new_firm",
+        "enabled": true
+      },
+      {
+        "id": "enrich_data",
+        "type": "api",
+        "title": "Firma Verilerini Zenginleştir",
+        "url": "https://api.example.com/enrich",
+        "method": "POST",
+        "body": {
+          "company_name": "{{trigger.firm_name}}",
+          "website": "{{trigger.website}}"
+        },
+        "timeout": 30
+      },
+      {
+        "id": "ai_personalization",
+        "type": "code",
+        "title": "AI ile Kişiselleştirme",
+        "code": "\n# AI ile kişiselleştirilmiş mesaj oluştur\nimport json\n\nfirm_data = variables.get('trigger')\nenriched_data = variables.get('enrich_result', {})\n\n# Firma özelliklerine göre segment belirle\nif enriched_data.get('employee_count', 0) > 100:\n    segment = 'enterprise'\nelif enriched_data.get('employee_count', 0) > 20:\n    segment = 'mid_market'\nelse:\n    segment = 'small_business'\n\n# Sektöre göre yaklaşım belirle\nindustry = enriched_data.get('industry', 'general')\nindustry_approaches = {\n    'technology': 'technical_benefits',\n    'retail': 'sales_increase',\n    'manufacturing': 'efficiency_gains',\n    'general': 'value_proposition'\n}\n\napproach = industry_approaches.get(industry, 'value_proposition')\n\n# Personalization context oluştur\npersonalization_context = {\n    'firm_name': firm_data.get('name'),\n    'segment': segment,\n    'industry': industry,\n    'approach': approach,\n    'technologies': enriched_data.get('technologies', []),\n    'pain_points': enriched_data.get('potential_pain_points', [])\n}\n\nset_variable('personalization_context', personalization_context)\nresult = personalization_context\n                    "
+      },
+      {
+        "id": "check_best_time",
+        "type": "code",
+        "title": "En İyi Gönderim Zamanını Hesapla",
+        "code": "\nfrom datetime import datetime, timedelta\n\n# Sektör ve segment bazlı en iyi gönderim zamanları\nbest_times = {\n    'enterprise': {'hour': 10, 'day_offset': 1},\n    'mid_market': {'hour': 14, 'day_offset': 1},\n    'small_business': {'hour': 9, 'day_offset': 0}\n}\n\nsegment = get_variable('personalization_context').get('segment', 'small_business')\ntiming = best_times.get(segment, {'hour': 10, 'day_offset': 1})\n\n# Gönderim zamanını hesapla\nnow = datetime.now()\nsend_date = now + timedelta(days=timing['day_offset'])\nsend_date = send_date.replace(hour=timing['hour'], minute=0, second=0)\n\n# Hafta sonu kontrolü\nif send_date.weekday() >= 5:  # Cumartesi veya Pazar\n    days_until_monday = 7 - send_date.weekday()\n    send_date += timedelta(days=days_until_monday)\n\nset_variable('scheduled_send_time', send_date.isoformat())\nresult = send_date.isoformat()\n                    "
+      },
+      {
+        "id": "wait_for_best_time",
+        "type": "delay",
+        "title": "En İyi Zamana Kadar Bekle",
+        "delay_type": "until",
+        "until": "{{scheduled_send_time}}"
+      },
+      {
+        "id": "generate_email",
+        "type": "api",
+        "title": "AI ile Email Oluştur",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "method": "POST",
+        "headers": {
+          "Authorization": "Bearer {{openai_api_key}}",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "model": "gpt-4",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Sen B2B satış uzmanısın. Kişiselleştirilmiş, ikna edici ve samimi satış mailleri yazıyorsun."
+            },
+            {
+              "role": "user",
+              "content": "Şu bilgilere göre bir hoşgeldin maili yaz: {{personalization_context}}"
+            }
+          ],
+          "temperature": 0.7
+        }
+      },
+      {
+        "id": "send_email",
+        "type": "action",
+        "title": "Email Gönder",
+        "action_type": "send_email",
+        "config": {
+          "to": "{{trigger.primary_email}}",
+          "subject": "{{email_subject}}",
+          "body": "{{email_body}}",
+          "track_opens": true,
+          "track_clicks": true
+        }
+      },
+      {
+        "id": "wait_for_open",
+        "type": "delay",
+        "title": "24 Saat Bekle",
+        "duration": 24,
+        "unit": "hours"
+      },
+      {
+        "id": "check_email_opened",
+        "type": "condition",
+        "title": "Email Açıldı mı?",
+        "condition": {
+          "operator": "equals",
+          "left": "{{email_opened}}",
+          "right": true
+        }
+      },
+      {
+        "id": "send_follow_up",
+        "type": "action",
+        "title": "Takip Maili Gönder",
+        "action_type": "send_email",
+        "enabled": true,
+        "config": {
+          "template": "follow_up_not_opened"
+        }
+      },
+      {
+        "id": "send_whatsapp",
+        "type": "action",
+        "title": "WhatsApp Mesajı Gönder",
+        "action_type": "send_whatsapp",
+        "config": {
+          "template": "welcome_opened",
+          "delay_hours": 48
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from": "trigger_new_firm",
+        "to": "enrich_data"
+      },
+      {
+        "from": "enrich_data",
+        "to": "ai_personalization"
+      },
+      {
+        "from": "ai_personalization",
+        "to": "check_best_time"
+      },
+      {
+        "from": "check_best_time",
+        "to": "wait_for_best_time"
+      },
+      {
+        "from": "wait_for_best_time",
+        "to": "generate_email"
+      },
+      {
+        "from": "generate_email",
+        "to": "send_email"
+      },
+      {
+        "from": "send_email",
+        "to": "wait_for_open"
+      },
+      {
+        "from": "wait_for_open",
+        "to": "check_email_opened"
+      },
+      {
+        "from": "check_email_opened",
+        "to": "send_follow_up",
+        "condition": "False"
+      },
+      {
+        "from": "check_email_opened",
+        "to": "send_whatsapp",
+        "condition": "True"
+      }
+    ],
+    "variables": [
+      {
+        "name": "openai_api_key",
+        "type": "string",
+        "value": "",
+        "scope": "global",
+        "readonly": true,
+        "description": "OpenAI API anahtarı"
+      }
+    ],
+    "settings": {
+      "max_execution_time": 86400,
+      "retry_on_failure": true,
+      "notification_email": "admin@example.com"
+    },
+    "created_at": "2025-09-21T15:10:18.713497",
+    "updated_at": "2025-09-21T15:10:18.713497"
+  },
+  "lead_scoring": {
+    "id": "lead_scoring",
+    "name": "Lead Scoring ve Otomatik Takip",
+    "description": "Firma davranışlarına göre lead scoring ve otomatik takip",
+    "version": "1.0.0",
+    "tags": [
+      "lead_scoring",
+      "automation",
+      "ai"
+    ],
+    "status": "active",
+    "blocks": [
+      {
+        "id": "trigger_behavior",
+        "type": "trigger",
+        "title": "Davranış Tetikleyici",
+        "trigger_type": "custom_event",
+        "events": [
+          "email_opened",
+          "link_clicked",
+          "website_visited",
+          "demo_requested"
+        ]
+      },
+      {
+        "id": "calculate_score",
+        "type": "code",
+        "title": "Lead Score Hesapla",
+        "code": "\n# Lead scoring algoritması\nevent = get_variable('trigger')\nfirm_id = event.get('firm_id')\n\n# Mevcut skoru al\ncurrent_score = get_variable(f'lead_score_{firm_id}') or 0\n\n# Event bazlı skorlama\nscore_weights = {\n    'email_opened': 5,\n    'link_clicked': 10,\n    'website_visited': 15,\n    'demo_requested': 50,\n    'replied_email': 30,\n    'whatsapp_replied': 25\n}\n\nevent_type = event.get('event_type')\nscore_increment = score_weights.get(event_type, 0)\n\n# Zaman bazlı çarpan (yeni eventler daha değerli)\ndays_since_last = (datetime.now() - datetime.fromisoformat(event.get('timestamp', datetime.now().isoformat()))).days\ntime_multiplier = max(0.5, 1 - (days_since_last * 0.1))\n\n# Nihai skor\nnew_score = current_score + (score_increment * time_multiplier)\nset_variable(f'lead_score_{firm_id}', new_score)\n\n# Segment belirleme\nif new_score >= 100:\n    segment = 'hot'\nelif new_score >= 50:\n    segment = 'warm'\nelse:\n    segment = 'cold'\n\nset_variable('lead_segment', segment)\nresult = {'score': new_score, 'segment': segment}\n                    "
+      },
+      {
+        "id": "check_segment",
+        "type": "condition",
+        "title": "Segment Kontrolü",
+        "condition": {
+          "operator": "equals",
+          "left": "{{lead_segment}}",
+          "right": "hot"
+        }
+      },
+      {
+        "id": "notify_sales",
+        "type": "action",
+        "title": "Satış Ekibini Bilgilendir",
+        "action_type": "send_notification",
+        "config": {
+          "channel": "slack",
+          "message": "🔥 HOT LEAD: {{trigger.firm_name}} - Score: {{lead_score}}"
+        }
+      },
+      {
+        "id": "create_task",
+        "type": "action",
+        "title": "Takip Görevi Oluştur",
+        "action_type": "create_task",
+        "config": {
+          "title": "Urgent: Contact {{trigger.firm_name}}",
+          "priority": "high",
+          "due_date": "+1 day"
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from": "trigger_behavior",
+        "to": "calculate_score"
+      },
+      {
+        "from": "calculate_score",
+        "to": "check_segment"
+      },
+      {
+        "from": "check_segment",
+        "to": "notify_sales",
+        "condition": "True"
+      },
+      {
+        "from": "notify_sales",
+        "to": "create_task"
+      }
+    ],
+    "variables": [],
+    "settings": {},
+    "created_at": "2025-09-21T15:10:18.713497",
+    "updated_at": "2025-09-21T15:10:18.713497"
+  }
+}

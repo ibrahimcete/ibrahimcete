@@ -1,0 +1,17 @@
+{
+    "google_api_key": "AIzaSyAC9rK16EQM_Ce6GLeaZe_pn4r4f6alLzA",
+    "openai_api_key": "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",
+    "apollo_api_key": "",
+    "snov_api_key": {
+        "client_id": "49139872121367703b7de0d48e2b1530",
+        "client_secret": "16bad4ae537893404a268624350f1a39"
+    },
+    "smtp_email": "ibrahimcete@trsatis.com",
+    "smtp_password": "lpym icku wyeq tkjg",
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": "587",
+    "tracking_url": "https://web-production-24136.up.railway.app",
+    "calendar_client_id": "78681729703-ut4e4gf5jbcgf6v4r1tqukkagt4kgbus.apps.googleusercontent.com",
+    "calendar_client_secret": "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",
+    "calendar_redirect_uri": "http://localhost"
+}
